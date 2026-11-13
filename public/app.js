@@ -97,18 +97,21 @@ function click() {
   tone(ac.currentTime, 1500, 0.07, 0.02, 'square');
 }
 
-/* ---------------- confetti: sevens, basketballs, stars ---------------- */
+/* ---------------- confetti, tap stickers, a little earthquake ---------------- */
+const PASTELS = ['#FF8FD2', '#7FEFC2', '#B9A4FF', '#FFAE85', '#84D0FF', '#FFF9F0'];
+const FACES = ['Modak', 'Rubik Iso', 'Faster One', 'Climate Crisis', 'Luckiest Guy', 'Rubik Bubbles', 'Chicle', 'Rubik Wet Paint'];
+const any = (a) => a[Math.floor(Math.random() * a.length)];
 function party(n = 26) {
   if (reduced) return;
   const box = $('party');
-  const colors = ['#F0122D', '#FF2E93', '#00D1C1', '#FF7A1A', '#8A3FFC', '#FFF6E8'];
   for (let i = 0; i < n; i++) {
     const e = document.createElement('i');
-    const kind = i % 3;
-    e.textContent = kind === 0 ? '7' : kind === 1 ? '●' : '★';
+    const kind = i % 4;
+    e.textContent = ['7', '●', '★', '✿'][kind];
     e.style.setProperty('--x', `${Math.random() * 100}%`);
-    e.style.setProperty('--s', `${1.2 + Math.random() * 2.2}rem`);
-    e.style.setProperty('--c', kind === 1 ? '#FF7A1A' : colors[Math.floor(Math.random() * colors.length)]);
+    e.style.setProperty('--s', `${1.4 + Math.random() * 2.6}rem`);
+    e.style.setProperty('--c', kind === 1 ? '#FF9A4D' : any(PASTELS));
+    e.style.setProperty('--ff', `'${any(FACES)}'`);
     e.style.setProperty('--d', `${1.4 + Math.random() * 1.6}s`);
     e.style.setProperty('--w', `${Math.random() * 0.5}s`);
     e.style.setProperty('--dx', `${(Math.random() - 0.5) * 160}px`);
@@ -117,51 +120,98 @@ function party(n = 26) {
     setTimeout(() => e.remove(), 3800);
   }
 }
+// every tap anywhere leaves a sticker
+if (!reduced) {
+  addEventListener('pointerdown', (ev) => {
+    const e = document.createElement('b');
+    e.textContent = any(['7', '7', '★', '✿', '●']);
+    e.style.setProperty('--x', `${ev.clientX}px`);
+    e.style.setProperty('--y', `${ev.clientY}px`);
+    e.style.setProperty('--c', any(PASTELS));
+    e.style.setProperty('--ff', `'${any(FACES)}'`);
+    e.style.setProperty('--r', `${(Math.random() - 0.5) * 80}deg`);
+    $('party').append(e);
+    setTimeout(() => e.remove(), 750);
+  }, { passive: true });
+}
+function bump() {
+  if (reduced) return;
+  document.body.classList.remove('bump'); void document.body.offsetWidth;
+  document.body.classList.add('bump');
+  setTimeout(() => document.body.classList.remove('bump'), 430);
+}
+function boing() {
+  if (!state.sound || !audio()) return;
+  const t = ac.currentTime; const o = ac.createOscillator();
+  o.frequency.setValueAtTime(170, t);
+  o.frequency.exponentialRampToValueAtTime(560, t + 0.12);
+  o.frequency.exponentialRampToValueAtTime(260, t + 0.34);
+  env(o, t, 0.3, 0.4); o.start(t); o.stop(t + 0.42);
+}
 
-/* ---------------- the wheel ---------------- */
+/* ---------------- the wheel (it has a face, a foam finger and sneakers) ---------------- */
 const N = QUESTIONS.length;
 const STEP = 360 / N;
-const COLORS = ['#FF2E93', '#00D1C1', '#8A3FFC', '#FF7A1A', '#F0122D'];
+const COLORS = ['#FF8FD2', '#7FEFC2', '#B9A4FF', '#FFAE85', '#84D0FF'];
+const PATS = ['dots', 'stripes', '', 'checks', 'zig', '', 'stripes', 'dots', 'zig', 'checks'];
+const INK = '#1D1235';
 const pol = (r, deg) => {
   const a = ((deg - 90) * Math.PI) / 180;
   return `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
 };
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-let platter; let flap;
+let platter; let flap; let pupils = [];
 
 function buildWheel() {
-  const R0 = 58; const R1 = 190;
+  const R0 = 52; const R1 = 192;
   let s = '<defs>'
-    + '<linearGradient id="chrome" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".25" stop-color="#9D96C7"/><stop offset=".5" stop-color="#F4F2FF"/><stop offset=".75" stop-color="#6F6899"/><stop offset="1" stop-color="#E4E0FA"/></linearGradient>'
-    + '<radialGradient id="ballg" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFB56B"/><stop offset=".45" stop-color="#FF7A1A"/><stop offset="1" stop-color="#A63D00"/></radialGradient>'
-    + '<radialGradient id="gloss" cx=".3" cy=".22" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".45" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>'
+    + `<pattern id="p-dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2.7" fill="${INK}"/><circle cx="12" cy="12" r="2.7" fill="${INK}"/></pattern>`
+    + `<pattern id="p-stripes" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="5" height="14" fill="${INK}"/></pattern>`
+    + `<pattern id="p-checks" width="22" height="22" patternUnits="userSpaceOnUse"><rect width="11" height="11" fill="${INK}"/><rect x="11" y="11" width="11" height="11" fill="${INK}"/></pattern>`
+    + `<pattern id="p-zig" width="20" height="13" patternUnits="userSpaceOnUse"><path d="M0 10L5 3L10 10L15 3L20 10" fill="none" stroke="${INK}" stroke-width="2.6"/></pattern>`
     + '</defs>';
-  // stand
-  s += '<path d="M-26 150 L-54 226 H54 L26 150Z" fill="url(#chrome)" stroke="#0A0522" stroke-width="4"/>';
-  // rim and bulbs (these stay still)
-  s += '<circle r="216" fill="url(#chrome)" stroke="#0A0522" stroke-width="4"/><circle r="195" fill="#0A0522"/>';
-  for (let i = 0; i < 24; i++) s += `<circle class="bulb b${i % 2}" r="6.5" transform="translate(${pol(205.5, i * 15)})"/>`;
+  // a scalloped burst behind the wheel, turning the other way
+  let burst = '';
+  for (let i = 0; i < 48; i++) burst += `${i ? 'L' : 'M'}${pol(i % 2 ? 212 : 231, i * 7.5)}`;
+  s += `<g><path d="${burst}Z" fill="#FFAE85" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`
+    + (reduced ? '' : '<animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="46s" repeatCount="indefinite"/>') + '</g>';
+  // legs and mismatched sneakers
+  const shoe = (fill) => `<path d="M12 -8V14H-36Q-48 14 -46 3Q-44 -4 -31 -5L-8 -9Z" fill="${fill}" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/><path d="M-30 -1l5 6M-21 -3l5 6" stroke="${INK}" stroke-width="3" stroke-linecap="round"/><path d="M-44 13H12" stroke="#FFF9F0" stroke-width="4"/>`;
+  s += `<g class="leg-l"><path d="M-44 186Q-52 220 -50 246" fill="none" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><g transform="translate(-52 258)">${shoe('#FF8FD2')}</g></g>`
+    + `<g class="leg-r"><path d="M44 186Q52 220 50 246" fill="none" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><g transform="translate(52 258) scale(-1 1)">${shoe('#7FEFC2')}</g></g>`;
+  s += `<circle r="202" fill="${INK}"/>`;
   // the part that spins
   s += '<g id="platter">';
   QUESTIONS.forEach((q, i) => {
     const a0 = i * STEP; const a1 = a0 + STEP; const c = a0 + STEP / 2;
-    s += `<g class="w" data-q="${q.id}">`
-      + `<path class="seg" fill="${COLORS[i % COLORS.length]}" d="M${pol(R0, a0)} L${pol(R1, a0)} A${R1} ${R1} 0 0 1 ${pol(R1, a1)} L${pol(R0, a1)} A${R0} ${R0} 0 0 0 ${pol(R0, a0)}Z"/>`
-      + `<text class="lbl" transform="rotate(${c - 90}) translate(72 6.5)">${esc(q.label)}</text></g>`;
+    const d = `M${pol(R0, a0)} L${pol(R1, a0)} A${R1} ${R1} 0 0 1 ${pol(R1, a1)} L${pol(R0, a1)} A${R0} ${R0} 0 0 0 ${pol(R0, a0)}Z`;
+    s += `<g class="w" data-q="${q.id}"><path class="seg" fill="${COLORS[i % COLORS.length]}" d="${d}"/>`
+      + (PATS[i] ? `<path class="pat" fill="url(#p-${PATS[i]})" opacity=".13" d="${d}"/>` : '')
+      + `<text class="lbl" transform="rotate(${c - 90}) translate(64 7)">${esc(q.label)}</text></g>`;
   });
-  for (let i = 0; i < N; i++) s += `<circle r="6" fill="url(#chrome)" stroke="#0A0522" stroke-width="2" transform="translate(${pol(R1 - 3, i * STEP)})"/>`;
-  // the hub is a basketball wearing number 7
-  s += '<circle r="58" fill="url(#ballg)" stroke="#0A0522" stroke-width="5"/>'
-    + '<path d="M0 -58V58M-58 0H58M-41 -41Q-13 0 -41 41M41 -41Q13 0 41 41" fill="none" stroke="#0A0522" stroke-width="3.5"/>'
-    + '</g>';
-  s += '<circle r="190" fill="url(#gloss)" pointer-events="none"/>';
-  s += '<text class="num" x="-3" y="28" text-anchor="middle">7</text>'; // the 7 stays upright while the ball spins under it
-  // the flapper at the top
-  s += '<g id="flap"><path d="M-17 -232 H17 L0 -182Z" fill="#F0122D" stroke="#0A0522" stroke-width="4" stroke-linejoin="round"/><circle cx="0" cy="-226" r="7" fill="url(#chrome)" stroke="#0A0522" stroke-width="3"/></g>';
+  for (let i = 0; i < N; i++) s += `<circle r="6" fill="#FFF9F0" stroke="${INK}" stroke-width="3" transform="translate(${pol(R1 - 2, i * STEP)})"/>`;
+  s += `<circle r="54" fill="#FF9A4D" stroke="${INK}" stroke-width="5"/>`
+    + `<path d="M0 -54V54M-54 0H54M-38 -38Q-12 0 -38 38M38 -38Q12 0 38 38" fill="none" stroke="${INK}" stroke-width="3.5"/></g>`;
+  // the ball's face stays put while the seams spin under it
+  s += `<circle cx="-18" cy="-9" r="14" fill="#fff" stroke="${INK}" stroke-width="4"/><circle cx="18" cy="-9" r="14" fill="#fff" stroke="${INK}" stroke-width="4"/>`
+    + `<circle class="pup" cx="-18" cy="-14" r="6" fill="${INK}"/><circle class="pup" cx="18" cy="-14" r="6" fill="${INK}"/>`
+    + `<path class="mouth-smile" d="M-17 20Q0 38 17 20" fill="#FF8FD2" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`
+    + `<ellipse class="mouth-o" cx="0" cy="27" rx="9" ry="12" fill="${INK}"/>`;
+  // a foam finger does the pointing
+  s += `<g id="flap"><path d="M-28 -258h56a9 9 0 0 1 9 9v22a9 9 0 0 1 -9 9h-18v26a10 10 0 0 1 -20 0v-26h-18a9 9 0 0 1 -9 -9v-22a9 9 0 0 1 9 -9z" fill="#84D0FF" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>`
+    + `<text x="0" y="-226" text-anchor="middle" font-family="Modak, Impact, sans-serif" font-size="30" fill="${INK}">7</text></g>`;
   $('wheel').innerHTML = s;
-  platter = $('platter'); flap = $('flap');
+  platter = $('platter'); flap = $('flap'); pupils = [...document.querySelectorAll('#wheel .pup')];
 }
 function setRotation(deg) { platter.setAttribute('transform', `rotate(${deg.toFixed(2)})`); }
+function eyes(theta) {
+  // null looks up at the finger; an angle sends the pupils round in circles
+  pupils.forEach((p, i) => {
+    const x = (i ? 18 : -18) + (theta == null ? 0 : 7 * Math.cos(theta + i));
+    const y = -9 + (theta == null ? -5 : 7 * Math.sin(theta + i));
+    p.setAttribute('cx', x.toFixed(1)); p.setAttribute('cy', y.toFixed(1));
+  });
+}
 function paintWheel() {
   document.querySelectorAll('#wheel .w').forEach((g) => {
     g.classList.toggle('answered', !!state.answered[g.dataset.q]);
@@ -201,9 +251,10 @@ async function spin(exclude) {
       const s = Math.floor(a / STEP);
       if (s !== seg) {
         seg = s; click();
-        flap.setAttribute('transform', 'rotate(-24 0 -226)');
+        flap.setAttribute('transform', 'rotate(-20 0 -240)');
         setTimeout(() => flap.setAttribute('transform', ''), 55);
       }
+      eyes(a / 14);
       if (p < 1) requestAnimationFrame(frame); else done();
     };
     requestAnimationFrame(frame);
@@ -212,23 +263,21 @@ async function spin(exclude) {
   $('wheel').classList.remove('spinning');
   state.rot = to % 360; state.current = pick.id; save();
   spinning = false;
-  playBells([660, 990], 0.09);
+  eyes(null); boing(); bump();
   paintWheel(); showCard();
 }
 
-/* ---------------- scoreboard ---------------- */
+/* ---------------- the sevens across the top ---------------- */
+let shown = -1;
 function paintBoard() {
   const c = count();
+  if (c === shown) return; // only repaint when the count changes, so the sevens don't all re-pop
+  shown = c;
+  const total = c >= JACKPOT_AT ? N : JACKPOT_AT;
   let s = '';
-  for (let i = 0; i < JACKPOT_AT; i++) s += `<span class="tile${i < c ? ' on' : ''}">7</span>`;
-  if (c >= JACKPOT_AT) for (let i = JACKPOT_AT; i < N; i++) s += `<span class="tile ot${i < c ? ' on' : ''}">7</span>`;
+  for (let i = 0; i < total; i++) s += `<span class="sv${i < c ? ' on' : ''}">7</span>`;
   $('lamps').innerHTML = s;
-  $('lamps').classList.toggle('ot', c >= JACKPOT_AT);
-  $('ledScore').textContent = pad2(c);
-  $('ledTO').textContent = String(state.timeouts);
-  $('board').setAttribute('aria-label', c >= JACKPOT_AT
-    ? `${c} of ${N} answered. Jackpot hit. ${state.timeouts} timeouts left.`
-    : `${c} of ${JACKPOT_AT} answered. ${state.timeouts} timeouts left.`);
+  $('lamps').setAttribute('aria-label', c >= JACKPOT_AT ? `${c} of ${N} answered. Seven for seven.` : `${c} of ${JACKPOT_AT} answered`);
 }
 
 /* ---------------- recording ---------------- */
@@ -454,39 +503,28 @@ function paintControls() {
     $('spinNote').textContent = state.gptSent ? 'Wheel’s empty. All ten answered.' : 'Wheel’s empty. Side B is next.';
   } else if (!busy) {
     const c = count();
-    $('spinNote').textContent = c === 0 ? 'Ten questions on the wheel. Seven hits the jackpot.'
-      : c < JACKPOT_AT ? `${JACKPOT_AT - c} more to the jackpot.`
+    $('spinNote').textContent = c === 0 ? 'Ten questions on the wheel. Seven and you win.'
+      : c < JACKPOT_AT ? `${JACKPOT_AT - c} more to seven.`
         : `Overtime. ${left} left on the wheel.`;
   } else $('spinNote').textContent = '';
   $('controls').hidden = $('spin').hidden && !$('spinNote').textContent;
 }
 
-/* ---------------- jackpot ---------------- */
+/* ---------------- seven for seven ---------------- */
 function openJackpot() {
   state.jackpotSeen = true; save();
   const j = $('jackpot');
-  const symbols = ['★', '●', '◆', '★', '●', '◆', '★', '7'];
   j.classList.remove('landed');
-  const strips = j.querySelectorAll('.strip');
-  strips.forEach((s) => {
-    s.style.transition = 'none'; s.style.transform = 'translateY(0)';
-    s.innerHTML = symbols.map((x) => `<span class="${x === '7' ? 'seven' : x === '●' ? 'ball' : ''}">${x}</span>`).join('');
-  });
   j.hidden = false;
-  void j.getBoundingClientRect();
-  const end = `translateY(-${((symbols.length - 1) / symbols.length) * 100}%)`;
-  const base = reduced ? 0 : 1600;
-  strips.forEach((s, i) => {
-    s.style.transition = ''; s.style.transitionDelay = `${reduced ? 0 : i * 0.4}s`; s.style.transform = end;
-    setTimeout(() => playBells([[784, 988, 1175][i]], 0), base + i * 400);
-  });
+  j.querySelectorAll('.sv').forEach((e) => { e.style.animation = 'none'; void e.offsetWidth; e.style.animation = ''; });
+  [0, 350, 700].forEach((ms, i) => setTimeout(() => { playBells([[784, 988, 1175][i]], 0); bump(); }, reduced ? 0 : ms + 380));
   setTimeout(() => {
     j.classList.add('landed');
-    playBells([784, 988, 1175, 1568, 1175, 1568], 0.11);
+    playBells([784, 988, 1175, 1568, 1175, 1568], 0.11); boing();
     party(70); setTimeout(() => party(50), 900);
     $('overtime').hidden = !remaining().length;
     (remaining().length ? $('overtime') : $('toB')).focus();
-  }, base + 3 * 400 + 250);
+  }, reduced ? 0 : 1500);
 }
 function closeJackpot() { $('jackpot').hidden = true; }
 
@@ -536,10 +574,10 @@ function paintOutro() {
   $('outro').hidden = !done;
   if (!done) return;
   const secs = Object.values(state.answered).reduce((a, x) => a + (x.seconds || 0), 0);
-  const cell = (v, cap) => `<div class="led-cell"><span class="led">${v}</span><span class="led-cap">${cap}</span></div>`;
-  $('boxScore').innerHTML = cell(pad2(count()), 'Answers')
-    + cell(fmt(secs), 'On the mic')
-    + cell(Math.round(secs * 18.5).toLocaleString('en-US'), 'Miles around the Sun');
+  const cell = (v, cap) => `<div class="stat"><b>${v}</b><span>${cap}</span></div>`;
+  $('boxScore').innerHTML = cell(count(), 'answers')
+    + cell(fmt(secs), 'on the mic')
+    + cell(Math.round(secs * 18.5).toLocaleString('en-US'), 'miles around the Sun');
 }
 function paintSound() {
   $('sound').textContent = state.sound ? 'Sound on' : 'Sound off';
@@ -579,7 +617,7 @@ $('typed').addEventListener('input', paintLock);
 $('lock').addEventListener('click', lockIn);
 $('timeout').addEventListener('click', () => {
   if (!canTimeout()) return;
-  state.timeouts -= 1; save(); paintBoard();
+  state.timeouts -= 1; save();
   const skipped = state.current;
   clearTake(); $('typed').value = '';
   spin(skipped);
