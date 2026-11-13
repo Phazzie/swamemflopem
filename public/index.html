@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFD100">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2716%27 fill=%27%23000%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%277%27 fill=%27%23F26B1D%27/%3E%3C/svg%3E">
+<title>Sydney, get on the record</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Bowlby+One&family=Permanent+Marker&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Cover -->
+<main id="cover" class="view">
+  <div class="cover-grid">
+    <div class="cover-words">
+      <p class="hand">Sydney,</p>
+      <h1 class="shout">Get on the record.</h1>
+      <p class="lede">T’s making a body-swap video. You and him, Freaky Friday. He wants the you in it to sound like you, so he’s asking instead of guessing.</p>
+      <ol class="how">
+        <li><b>Spin.</b> The needle picks your question.</li>
+        <li><b>Hit the mic and talk.</b> Ramble. Change your mind halfway through. You can type instead if you can’t talk right now.</li>
+        <li><b>Seven answers hits the jackpot.</b> There are ten on the record if you want overtime.</li>
+      </ol>
+      <p class="lede small">After that, flip to Side B: one question to hand your ChatGPT.</p>
+      <button id="start" class="btn btn-big" type="button">Drop the needle</button>
+      <p class="fine">Your recordings go to T and the AI he writes with. Nobody else hears them.</p>
+    </div>
+    <div class="cover-art" aria-hidden="true">
+      <div class="sevens"><span>7</span><span>7</span><span>7</span></div>
+    </div>
+  </div>
+</main>
+
+<!-- Top bar: cassette sides -->
+<nav id="bar" class="bar" hidden aria-label="Sides">
+  <div class="sides" role="tablist">
+    <button role="tab" id="tabA" class="side" aria-selected="true" aria-controls="sideA" type="button"><span class="side-letter">A</span> Record</button>
+    <button role="tab" id="tabB" class="side" aria-selected="false" aria-controls="sideB" type="button"><span class="side-letter">B</span> ChatGPT</button>
+  </div>
+  <button id="sound" class="sound" type="button" aria-pressed="true">Sound on</button>
+</nav>
+
+<!-- Side A -->
+<main id="sideA" class="view" hidden role="tabpanel" aria-labelledby="tabA">
+  <div class="lamps" id="lamps" role="img" aria-label="0 of 7 answered"></div>
+
+  <div class="deck">
+    <section class="table" aria-label="The record">
+      <div class="turntable">
+        <svg id="platter" class="platter" viewBox="-200 -200 400 400" aria-hidden="true"></svg>
+        <svg class="arm" viewBox="-200 -200 400 400" aria-hidden="true">
+          <circle cx="176" cy="-176" r="20" fill="#000" stroke="#FFD100" stroke-width="3"/>
+          <circle cx="176" cy="-176" r="6" fill="#FFD100"/>
+          <line x1="176" y1="-176" x2="136" y2="-136" stroke="#000" stroke-width="9" stroke-linecap="round"/>
+          <line x1="176" y1="-176" x2="136" y2="-136" stroke="#FFD100" stroke-width="2"/>
+          <g transform="translate(131 -131) rotate(45)">
+            <rect x="-10" y="-6" width="20" height="20" rx="3" fill="#E10600" stroke="#000" stroke-width="3"/>
+            <path d="M0 14 L-5 23 L5 23 Z" fill="#000"/>
+          </g>
+        </svg>
+      </div>
+      <div class="controls" id="controls">
+        <button id="spin" class="btn btn-big" type="button">Spin</button>
+        <p id="spinNote" class="note" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="card" id="card" aria-live="polite" hidden>
+      <p class="chamber" id="chamber"></p>
+      <p class="setup" id="setup" hidden></p>
+      <h2 class="question" id="question" tabindex="-1"></h2>
+      <p class="nudge" id="nudge" hidden></p>
+
+      <div class="talk" id="talk">
+        <button id="rec" class="rec" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true" class="ico-mic"><path fill="currentColor" d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4Zm7-4a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11Z"/></svg>
+          <svg viewBox="0 0 24 24" width="38" height="38" aria-hidden="true" class="ico-stop"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>
+        </button>
+        <div class="talk-words">
+          <p class="rec-label" id="recLabel">Tap and talk</p>
+          <p class="clock" id="clock" hidden>0:00</p>
+        </div>
+      </div>
+
+      <div class="review" id="review" hidden>
+        <audio id="playback" controls preload="metadata"></audio>
+        <button id="redo" class="btn btn-ghost" type="button">Run it back</button>
+      </div>
+
+      <details class="typed" id="typedWrap">
+        <summary>Can’t talk right now? Type it</summary>
+        <label class="sr" for="typed">Your answer</label>
+        <textarea id="typed" rows="5" placeholder="Type like you talk."></textarea>
+      </details>
+
+      <div class="card-actions">
+        <button id="lock" class="btn" type="button" disabled>Lock it in</button>
+        <button id="timeout" class="btn btn-ghost" type="button">Call a timeout</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <a id="rescue" class="rescue" hidden download>Save a copy of the recording to this phone</a>
+    </section>
+
+    <section class="card done" id="doneCard" hidden aria-live="polite">
+      <p class="chamber" id="doneTitle">Locked in.</p>
+      <div class="cosmos">
+        <p class="cosmos-tag">The Neil deGrasse Tyson corner</p>
+        <p class="cosmos-fact" id="fact"></p>
+      </div>
+      <div class="card-actions">
+        <button id="again" class="btn btn-big" type="button">Spin again</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="outro" id="outro" hidden>
+    <p class="hand">That’s everything T asked for.</p>
+    <h2 class="shout shout-sm">Your Wu name: <span id="wuName"></span></h2>
+    <button id="reroll" class="btn btn-ghost" type="button">Not me. Draw another</button>
+  </section>
+</main>
+
+<!-- Side B -->
+<main id="sideB" class="view" hidden role="tabpanel" aria-labelledby="tabB">
+  <div class="sideb">
+    <p class="hand">Side B</p>
+    <h2 class="shout shout-sm">Ask the one who’s read all your messages.</h2>
+    <p class="lede">Your ChatGPT has seen how you actually talk. Hand it this and bring back what it says.</p>
+    <ol class="how">
+      <li><b>Copy the prompt</b> below.</li>
+      <li><b>Paste it into your ChatGPT</b>, the one that knows you.</li>
+      <li><b>Read what it says.</b> Cut anything you don’t want T to see.</li>
+      <li><b>Paste the rest here</b> and send it.</li>
+    </ol>
+    <div class="jcard">
+      <pre id="prompt" class="prompt" tabindex="0"></pre>
+      <button id="copy" class="btn" type="button">Copy the prompt</button>
+    </div>
+    <label class="field-label" for="gpt">What your ChatGPT said</label>
+    <textarea id="gpt" rows="10" placeholder="Paste it here."></textarea>
+    <div class="card-actions">
+      <button id="sendGpt" class="btn btn-big" type="button" disabled>Send it to T</button>
+    </div>
+    <p class="status" id="gptStatus" role="status"></p>
+  </div>
+</main>
+
+<!-- Jackpot -->
+<div id="jackpot" class="jackpot" hidden role="dialog" aria-modal="true" aria-labelledby="jackTitle">
+  <div class="reels" aria-hidden="true">
+    <div class="reel"><div class="strip"></div></div>
+    <div class="reel"><div class="strip"></div></div>
+    <div class="reel"><div class="strip"></div></div>
+  </div>
+  <h2 id="jackTitle" class="shout">Jackpot.</h2>
+  <p class="lede">Seven answers. And one: there are three questions left on the record if you want overtime.</p>
+  <div class="card-actions">
+    <button id="overtime" class="btn btn-big" type="button">Play overtime</button>
+    <button id="toB" class="btn btn-ghost" type="button">Flip to Side B</button>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

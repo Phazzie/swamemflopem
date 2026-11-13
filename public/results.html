@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2716%27 fill=%27%23000%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%277%27 fill=%27%23F26B1D%27/%3E%3C/svg%3E">
+<title>Sydney’s answers</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Bowlby+One&display=swap" rel="stylesheet">
+<style>
+  :root { --yellow:#FFD100; --paper:#FFFDF5; --red:#E10600; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--yellow); color:#000; font:1rem/1.45 Archivo, Arial, sans-serif; }
+  main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.1rem 4rem; }
+  h1 { font: 400 clamp(2.2rem, 8vw, 3.6rem)/.95 'Bowlby One', Impact, sans-serif; margin: 0 0 1rem; }
+  h2 { font: 400 1.5rem/1.1 'Bowlby One', Impact, sans-serif; margin: 2rem 0 .75rem; }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  input { font:inherit; padding:.7rem .8rem; border:3px solid #000; border-radius:10px; min-width: 14rem; flex:1; }
+  button, a.dl { font:inherit; font-weight:800; color:var(--yellow); background:#000; border:3px solid #000; border-radius:999px; padding:.6rem 1.1rem; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.ghost { background:var(--paper); color:#000; }
+  button:disabled { opacity:.4; }
+  .ans { background:var(--paper); border:3px solid #000; border-radius:14px; box-shadow:5px 5px 0 #000; padding:1rem; margin:0 0 1rem; }
+  .ans h3 { margin:0 0 .25rem; font-size:1.15rem; }
+  .q { margin:0 0 .6rem; font-weight:600; }
+  .meta { font-size:.9rem; margin:0 0 .6rem; }
+  .typed, .gpt { white-space:pre-wrap; background:#fff; border:2px solid #000; border-radius:10px; padding:.7rem; margin:.5rem 0 0; }
+  audio { width:100%; margin-top:.6rem; }
+  .bad { color:var(--red); font-weight:700; }
+  :focus-visible { outline:4px solid #1A1250; outline-offset:3px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sydney’s answers</h1>
+  <form id="gate" class="row">
+    <label for="key" style="position:absolute;left:-999px">Passcode</label>
+    <input id="key" type="password" placeholder="Passcode" autocomplete="off">
+    <button type="submit">Open</button>
+  </form>
+  <p id="msg" role="status"></p>
+  <div id="out"></div>
+</main>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+let key = sessionStorage.getItem('swam.key') || '';
+const api = (path) => fetch(path, { headers: { 'x-key': key } });
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+async function open() {
+  $('msg').textContent = 'Loading'; $('msg').className = '';
+  const r = await api('/api/list');
+  if (r.status === 401) { $('msg').textContent = 'Wrong passcode.'; $('msg').className = 'bad'; return; }
+  if (!r.ok) { $('msg').textContent = 'Storage didn’t answer. Reload and try again.'; $('msg').className = 'bad'; return; }
+  sessionStorage.setItem('swam.key', key);
+  const { files } = await r.json();
+  const sessions = {};
+  for (const f of files) {
+    const [, sid, a, b, c] = f.pathname.split('/');
+    const s = (sessions[sid] ||= { sid, takes: {}, gpt: [], first: f.uploadedAt });
+    if (f.uploadedAt < s.first) s.first = f.uploadedAt;
+    if (a === 'chatgpt') s.gpt.push(f);
+    else if (b && b.startsWith('take-')) {
+      const t = (s.takes[`${a}/${b}`] ||= { q: a, take: b.slice(5), parts: 0, bytes: 0, meta: null });
+      if (c === 'meta.json') t.meta = f.pathname; else { t.parts += 1; t.bytes += f.size; }
+    }
+  }
+  const out = $('out'); out.textContent = '';
+  const list = Object.values(sessions).sort((x, y) => (x.first < y.first ? 1 : -1));
+  $('msg').textContent = list.length ? '' : 'Nothing saved yet.';
+  for (const s of list) {
+    out.append(el('h2', '', `Session ${s.sid.slice(0, 6)}, started ${new Date(s.first).toLocaleString()}`));
+    const takes = Object.values(s.takes).sort((x, y) => x.take - y.take);
+    for (const t of takes) out.append(await answerCard(s.sid, t));
+    for (const g of s.gpt) {
+      const box = el('div', 'ans'); box.append(el('h3', '', 'What her ChatGPT said'));
+      const body = el('div', 'gpt', 'Loading'); box.append(body); out.append(box);
+      api(`/api/file?pathname=${encodeURIComponent(g.pathname)}`).then((x) => x.text()).then((x) => { body.textContent = x; });
+    }
+  }
+}
+
+async function answerCard(sid, t) {
+  const box = el('div', 'ans');
+  let meta = null;
+  if (t.meta) { try { meta = await (await api(`/api/file?pathname=${encodeURIComponent(t.meta)}`)).json(); } catch {} }
+  box.append(el('h3', '', meta ? `${meta.order}. ${meta.label}` : `${t.q} (upload never finished)`));
+  if (meta) box.append(el('p', 'q', meta.question));
+  const bits = [new Date(Number(t.take)).toLocaleString()];
+  if (meta?.audio) bits.push(`${fmt(meta.audio.seconds)} recorded`, `${(t.bytes / 1048576).toFixed(1)} MB`);
+  box.append(el('p', 'meta', bits.join(', ')));
+  if (meta?.typed) box.append(el('div', 'typed', meta.typed));
+  if (t.parts) {
+    const row = el('div', 'row');
+    const play = el('button', '', 'Load recording');
+    row.append(play); box.append(row);
+    play.onclick = async () => {
+      play.disabled = true; play.textContent = 'Loading';
+      const mime = meta?.audio?.mime || 'audio/webm';
+      const r = await api(`/api/file?sid=${sid}&q=${t.q}&take=${t.take}&mime=${encodeURIComponent(mime)}`);
+      if (!r.ok) { play.textContent = 'Couldn’t load. Try again'; play.disabled = false; return; }
+      const blob = new Blob([await r.arrayBuffer()], { type: mime.split(';')[0] });
+      const url = URL.createObjectURL(blob);
+      const a = el('audio'); a.controls = true; a.src = url;
+      const dl = el('a', 'dl', 'Download'); dl.href = url;
+      dl.download = `sydney_${String(meta?.order || 0).padStart(2, '0')}_${t.q}.${mime.includes('mp4') ? 'm4a' : 'webm'}`;
+      play.remove(); row.append(dl); box.append(a);
+    };
+  }
+  return box;
+}
+
+$('gate').addEventListener('submit', (e) => { e.preventDefault(); key = $('key').value.trim(); open(); });
+if (key) { $('key').value = key; open(); }
+</script>
+</body>
+</html>
