@@ -1,5 +1,5 @@
 // Everything Sydney reads lives in this file, so the words are easy to change.
-// `label` is what's printed on the record. `nudge` shows up a few seconds into a recording.
+// `label` is what's printed on the wheel. `nudge` shows up a few seconds into a recording.
 
 export const JACKPOT_AT = 7; // answers needed to hit 777
 export const TIMEOUTS = 2; // re-spins she can call without answering
@@ -83,7 +83,7 @@ Answer these seven, numbered:
 
 Keep the whole thing under 600 words.`;
 
-// The Neil deGrasse Tyson corner: true numbers, worked out from how long she talked.
+// The Neil deGrasse Tyson time-out: true numbers, worked out from how long she talked.
 const n = (x) => Math.round(x).toLocaleString('en-US');
 export const FACTS = [
   (s) => `While you talked, the Earth carried you about ${n(s * 18.5)} miles around the Sun.`,
@@ -98,12 +98,3 @@ export const FACTS = [
   (s) => `While you talked, Voyager 1 got about ${n(s * 10.5)} miles farther from home. It left in 1977.`,
 ];
 export const FACT_TYPED = 'You typed that one, so the universe couldn’t time you. It kept moving anyway.';
-
-export const WU_FIRST = [
-  'Lucky', 'Golden', 'Midnight', 'Thunderous', 'Smiling', 'Phantom', 'Crafty', 'Mighty', 'Irate', 'Quiet',
-  'Respected', 'Unpredictable', 'Velvet', 'Seven-Time', 'Left-Handed', 'Patient', 'Diamond', 'Furious',
-];
-export const WU_LAST = [
-  'Ambassador', 'Mastermind', 'Bandit', 'Prophet', 'Observer', 'Wanderer', 'Magician', 'Conqueror',
-  'Professional', 'Overlord', 'Desperado', 'Genius', 'Dreamer', 'Point Guard', 'Astronomer', 'Dealer',
-];

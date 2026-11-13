@@ -1,10 +1,9 @@
-import {
-  QUESTIONS, GPT_PROMPT, FACTS, FACT_TYPED, WU_FIRST, WU_LAST, JACKPOT_AT, TIMEOUTS,
-} from './questions.js';
+import { QUESTIONS, GPT_PROMPT, FACTS, FACT_TYPED, JACKPOT_AT, TIMEOUTS } from './questions.js';
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pad2 = (n) => String(n).padStart(2, '0');
 
 /* ---------------- saved state (survives leaving for the ChatGPT app and coming back) ---------------- */
 const KEY = 'swam.v1';
@@ -20,16 +19,18 @@ function load() {
   return null;
 }
 const state = Object.assign(
-  { sid: newSid(), started: false, answered: {}, timeouts: TIMEOUTS, current: null, gptSent: false, jackpotSeen: false, sound: true, wu: 0, rot: 0, side: 'A' },
+  { sid: newSid(), started: false, answered: {}, timeouts: TIMEOUTS, current: null, gptSent: false, jackpotSeen: false, sound: true, rot: 0, side: 'A' },
   load() || {},
 );
+// answers saved under an older question list don't count against this one
+for (const id of Object.keys(state.answered)) if (!QUESTIONS.some((q) => q.id === id)) delete state.answered[id];
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode: carry on in memory */ } };
 
 const count = () => Object.keys(state.answered).length;
 const remaining = () => QUESTIONS.filter((q) => !state.answered[q.id]);
 const byId = (id) => QUESTIONS.find((q) => q.id === id);
 
-/* ---------------- sound: a drum break for the spin, bells for the jackpot (all synthesized) ---------------- */
+/* ---------------- sound: a drum break under the spin, wheel clicks, bells (all synthesized) ---------------- */
 let ac; let noise;
 function audio() {
   if (!ac) {
@@ -49,6 +50,10 @@ function env(node, t, peak, len) {
   g.gain.exponentialRampToValueAtTime(0.001, t + len);
   node.connect(g).connect(ac.destination);
 }
+function tone(t, freq, peak, len, type = 'sine') {
+  const o = ac.createOscillator(); o.type = type; o.frequency.value = freq;
+  env(o, t, peak, len); o.start(t); o.stop(t + len + 0.02);
+}
 function kick(t) {
   const o = ac.createOscillator();
   o.frequency.setValueAtTime(150, t);
@@ -60,28 +65,21 @@ function burst(t, type, freq, peak, len) {
   const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = 0.8;
   s.connect(f); env(f, t, peak, len); s.start(t); s.stop(t + len + 0.02);
 }
-function snare(t) {
-  burst(t, 'bandpass', 1900, 0.5, 0.17);
-  const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = 190;
-  env(o, t, 0.25, 0.09); o.start(t); o.stop(t + 0.1);
-}
-function bell(t, f, peak = 0.22, len = 0.9) {
-  for (const [mult, p] of [[1, peak], [2.76, peak * 0.35]]) {
-    const o = ac.createOscillator(); o.frequency.value = f * mult;
-    env(o, t, p, len); o.start(t); o.stop(t + len + 0.02);
-  }
-}
+function snare(t) { burst(t, 'bandpass', 1900, 0.5, 0.17); tone(t, 190, 0.25, 0.09, 'triangle'); }
+function bell(t, f, peak = 0.22, len = 0.9) { tone(t, f, peak, len); tone(t, f * 2.76, peak * 0.35, len); }
 function playBreak(seconds) {
   if (!state.sound || !audio()) return;
-  const step = 60 / 96 / 4; // sixteenth notes at 96 beats a minute
+  const step = 60 / 94 / 4; // sixteenth notes at 94 beats a minute
   const t0 = ac.currentTime + 0.03;
   const kicks = [0, 7, 10]; const snares = [4, 12];
+  const bass = { 0: 55, 3: 55, 7: 65.4, 10: 49, 14: 55 }; // a low, lazy bassline
   for (let i = 0; i * step < seconds - 0.2; i++) {
     const s = i % 16;
-    const t = t0 + i * step + (s % 2 ? 0.028 : 0); // a little swing
+    const t = t0 + i * step + (s % 2 ? 0.03 : 0); // swing
     if (kicks.includes(s) || (i > 16 && s === 15)) kick(t);
     if (snares.includes(s)) snare(t);
-    if (s % 2 === 0) burst(t, 'highpass', 7000, s % 4 === 0 ? 0.13 : 0.07, 0.04);
+    if (s % 2 === 0) burst(t, 'highpass', 7000, s % 4 === 0 ? 0.12 : 0.06, 0.04);
+    if (bass[s]) { tone(t, bass[s], 0.42, 0.34); tone(t, bass[s] * 2, 0.08, 0.3, 'triangle'); }
   }
 }
 function playBells(freqs, gap = 0.12) {
@@ -89,40 +87,83 @@ function playBells(freqs, gap = 0.12) {
   const t0 = ac.currentTime + 0.02;
   freqs.forEach((f, i) => bell(t0 + i * gap, f));
 }
+let lastClick = 0;
+function click() {
+  const now = performance.now();
+  if (now - lastClick < 38) return;
+  lastClick = now;
+  if (!state.sound || !ac) return;
+  burst(ac.currentTime, 'highpass', 2600, 0.22, 0.018);
+  tone(ac.currentTime, 1500, 0.07, 0.02, 'square');
+}
 
-/* ---------------- the record ---------------- */
+/* ---------------- confetti: sevens, basketballs, stars ---------------- */
+function party(n = 26) {
+  if (reduced) return;
+  const box = $('party');
+  const colors = ['#F0122D', '#FF2E93', '#00D1C1', '#FF7A1A', '#8A3FFC', '#FFF6E8'];
+  for (let i = 0; i < n; i++) {
+    const e = document.createElement('i');
+    const kind = i % 3;
+    e.textContent = kind === 0 ? '7' : kind === 1 ? '●' : '★';
+    e.style.setProperty('--x', `${Math.random() * 100}%`);
+    e.style.setProperty('--s', `${1.2 + Math.random() * 2.2}rem`);
+    e.style.setProperty('--c', kind === 1 ? '#FF7A1A' : colors[Math.floor(Math.random() * colors.length)]);
+    e.style.setProperty('--d', `${1.4 + Math.random() * 1.6}s`);
+    e.style.setProperty('--w', `${Math.random() * 0.5}s`);
+    e.style.setProperty('--dx', `${(Math.random() - 0.5) * 160}px`);
+    e.style.setProperty('--r', `${(Math.random() - 0.5) * 900}deg`);
+    box.append(e);
+    setTimeout(() => e.remove(), 3800);
+  }
+}
+
+/* ---------------- the wheel ---------------- */
 const N = QUESTIONS.length;
 const STEP = 360 / N;
-const POINTER = 45; // where the needle sits, in degrees clockwise from the top
+const COLORS = ['#FF2E93', '#00D1C1', '#8A3FFC', '#FF7A1A', '#F0122D'];
 const pol = (r, deg) => {
   const a = ((deg - 90) * Math.PI) / 180;
   return `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
 };
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let platter; let flap;
 
-function buildPlatter() {
-  const R0 = 66; const R1 = 190;
-  let s = '<circle r="198" fill="#000"/><circle r="194" fill="none" stroke="#FFD100" stroke-width="2"/>';
+function buildWheel() {
+  const R0 = 58; const R1 = 190;
+  let s = '<defs>'
+    + '<linearGradient id="chrome" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".25" stop-color="#9D96C7"/><stop offset=".5" stop-color="#F4F2FF"/><stop offset=".75" stop-color="#6F6899"/><stop offset="1" stop-color="#E4E0FA"/></linearGradient>'
+    + '<radialGradient id="ballg" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFB56B"/><stop offset=".45" stop-color="#FF7A1A"/><stop offset="1" stop-color="#A63D00"/></radialGradient>'
+    + '<radialGradient id="gloss" cx=".3" cy=".22" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".45" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>'
+    + '</defs>';
+  // stand
+  s += '<path d="M-26 150 L-54 226 H54 L26 150Z" fill="url(#chrome)" stroke="#0A0522" stroke-width="4"/>';
+  // rim and bulbs (these stay still)
+  s += '<circle r="216" fill="url(#chrome)" stroke="#0A0522" stroke-width="4"/><circle r="195" fill="#0A0522"/>';
+  for (let i = 0; i < 24; i++) s += `<circle class="bulb b${i % 2}" r="6.5" transform="translate(${pol(205.5, i * 15)})"/>`;
+  // the part that spins
+  s += '<g id="platter">';
   QUESTIONS.forEach((q, i) => {
     const a0 = i * STEP; const a1 = a0 + STEP; const c = a0 + STEP / 2;
     s += `<g class="w" data-q="${q.id}">`
-      + `<path class="wedge${i % 2 ? ' alt' : ''}" d="M${pol(R0, a0)} L${pol(R1, a0)} A${R1} ${R1} 0 0 1 ${pol(R1, a1)} L${pol(R0, a1)} A${R0} ${R0} 0 0 0 ${pol(R0, a0)}Z"/>`
-      + `<text class="lbl" transform="rotate(${c - 90}) translate(80 6)">${esc(q.label)}</text></g>`;
+      + `<path class="seg" fill="${COLORS[i % COLORS.length]}" d="M${pol(R0, a0)} L${pol(R1, a0)} A${R1} ${R1} 0 0 1 ${pol(R1, a1)} L${pol(R0, a1)} A${R0} ${R0} 0 0 0 ${pol(R0, a0)}Z"/>`
+      + `<text class="lbl" transform="rotate(${c - 90}) translate(72 6.5)">${esc(q.label)}</text></g>`;
   });
-  for (const r of [104, 128, 152, 176]) s += `<circle r="${r}" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="1"/>`;
-  // the label in the middle of the record is a basketball
-  s += '<circle r="62" fill="#F26B1D" stroke="#000" stroke-width="5"/>'
-    + '<path d="M0 -62V62M-62 0H62M-44 -44Q-14 0 -44 44M44 -44Q14 0 44 44" fill="none" stroke="#000" stroke-width="3.5"/>'
-    + '<text class="num" x="0" y="31" text-anchor="middle">7</text>';
-  $('platter').innerHTML = s;
+  for (let i = 0; i < N; i++) s += `<circle r="6" fill="url(#chrome)" stroke="#0A0522" stroke-width="2" transform="translate(${pol(R1 - 3, i * STEP)})"/>`;
+  // the hub is a basketball wearing number 7
+  s += '<circle r="58" fill="url(#ballg)" stroke="#0A0522" stroke-width="5"/>'
+    + '<path d="M0 -58V58M-58 0H58M-41 -41Q-13 0 -41 41M41 -41Q13 0 41 41" fill="none" stroke="#0A0522" stroke-width="3.5"/>'
+    + '</g>';
+  s += '<circle r="190" fill="url(#gloss)" pointer-events="none"/>';
+  s += '<text class="num" x="-3" y="28" text-anchor="middle">7</text>'; // the 7 stays upright while the ball spins under it
+  // the flapper at the top
+  s += '<g id="flap"><path d="M-17 -232 H17 L0 -182Z" fill="#F0122D" stroke="#0A0522" stroke-width="4" stroke-linejoin="round"/><circle cx="0" cy="-226" r="7" fill="url(#chrome)" stroke="#0A0522" stroke-width="3"/></g>';
+  $('wheel').innerHTML = s;
+  platter = $('platter'); flap = $('flap');
 }
-function setRotation(deg, instant) {
-  const p = $('platter');
-  if (instant) { p.style.transition = 'none'; p.style.transform = `rotate(${deg}deg)`; void p.getBoundingClientRect(); p.style.transition = ''; } else p.style.transform = `rotate(${deg}deg)`;
-  state.rot = deg;
-}
-function paintPlatter() {
-  document.querySelectorAll('#platter .w').forEach((g) => {
+function setRotation(deg) { platter.setAttribute('transform', `rotate(${deg.toFixed(2)})`); }
+function paintWheel() {
+  document.querySelectorAll('#wheel .w').forEach((g) => {
     g.classList.toggle('answered', !!state.answered[g.dataset.q]);
     g.classList.toggle('current', state.current === g.dataset.q);
   });
@@ -135,34 +176,59 @@ async function spin(exclude) {
   if (exclude && pool.length > 1) pool = pool.filter((q) => q.id !== exclude);
   if (!pool.length) return;
   spinning = true;
-  state.current = null; paintPlatter();
+  state.current = null; paintWheel();
   $('card').hidden = true; $('doneCard').hidden = true;
-  $('spin').disabled = true; $('spinNote').textContent = '';
+  $('controls').hidden = false; $('spin').hidden = false; $('spin').disabled = true; $('spinNote').textContent = '';
 
   const pick = pool[Math.floor(Math.random() * pool.length)];
   const i = QUESTIONS.indexOf(pick);
   const jitter = (Math.random() - 0.5) * (STEP - 12);
-  const target = POINTER - (i * STEP + STEP / 2) + jitter;
-  const delta = (((target - state.rot) % 360) + 360) % 360;
-  const dur = reduced ? 0.05 : 4.8;
-  playBreak(dur);
-  setRotation(state.rot + 360 * 4 + delta);
-  await sleep(dur * 1000 + 120);
+  const target = -(i * STEP + STEP / 2) + jitter; // puts that wedge under the flapper at the top
+  const from = state.rot;
+  const delta = (((target - from) % 360) + 360) % 360;
+  const to = from + 360 * 5 + delta;
+  const dur = reduced ? 60 : 5200;
+  audio(); playBreak(dur / 1000);
+  $('wheel').classList.add('spinning');
 
-  state.current = pick.id; save();
+  await new Promise((done) => {
+    const t0 = performance.now();
+    let seg = Math.floor(from / STEP);
+    const frame = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const a = from + (to - from) * (1 - (1 - p) ** 4);
+      setRotation(a);
+      const s = Math.floor(a / STEP);
+      if (s !== seg) {
+        seg = s; click();
+        flap.setAttribute('transform', 'rotate(-24 0 -226)');
+        setTimeout(() => flap.setAttribute('transform', ''), 55);
+      }
+      if (p < 1) requestAnimationFrame(frame); else done();
+    };
+    requestAnimationFrame(frame);
+  });
+
+  $('wheel').classList.remove('spinning');
+  state.rot = to % 360; state.current = pick.id; save();
   spinning = false;
-  playBells([660], 0);
-  paintPlatter(); showCard();
+  playBells([660, 990], 0.09);
+  paintWheel(); showCard();
 }
 
-/* ---------------- lamps ---------------- */
-function paintLamps() {
+/* ---------------- scoreboard ---------------- */
+function paintBoard() {
   const c = count();
   let s = '';
-  for (let i = 0; i < JACKPOT_AT; i++) s += `<span class="lamp${i < c ? ' on' : ''}">7</span>`;
-  if (c >= JACKPOT_AT) for (let i = JACKPOT_AT; i < N; i++) s += `<span class="lamp ot${i < c ? ' on' : ''}">7</span>`;
+  for (let i = 0; i < JACKPOT_AT; i++) s += `<span class="tile${i < c ? ' on' : ''}">7</span>`;
+  if (c >= JACKPOT_AT) for (let i = JACKPOT_AT; i < N; i++) s += `<span class="tile ot${i < c ? ' on' : ''}">7</span>`;
   $('lamps').innerHTML = s;
-  $('lamps').setAttribute('aria-label', c >= JACKPOT_AT ? `${c} of ${N} answered. Jackpot hit.` : `${c} of ${JACKPOT_AT} answered`);
+  $('lamps').classList.toggle('ot', c >= JACKPOT_AT);
+  $('ledScore').textContent = pad2(c);
+  $('ledTO').textContent = String(state.timeouts);
+  $('board').setAttribute('aria-label', c >= JACKPOT_AT
+    ? `${c} of ${N} answered. Jackpot hit. ${state.timeouts} timeouts left.`
+    : `${c} of ${JACKPOT_AT} answered. ${state.timeouts} timeouts left.`);
 }
 
 /* ---------------- recording ---------------- */
@@ -172,7 +238,7 @@ let take = null; // { blob, mime, seconds, url }
 let rec = null; let stream = null; let chunks = []; let t0 = 0; let tick = null; let raf = null; let saving = false;
 
 const setStatus = (el, msg, bad) => { el.textContent = msg || ''; el.classList.toggle('bad', !!bad); };
-const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const fmt = (s) => `${Math.floor(s / 60)}:${pad2(Math.floor(s % 60))}`;
 
 function pickMime() {
   const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
@@ -206,7 +272,8 @@ async function startRec() {
 
   $('rec').setAttribute('aria-pressed', 'true');
   $('rec').setAttribute('aria-label', 'Stop recording');
-  $('recLabel').textContent = 'Recording. Tap when you’re done';
+  $('tape').classList.add('rolling');
+  $('recLabel').textContent = 'Tape’s rolling. Tap when you’re done';
   $('clock').hidden = false; $('clock').textContent = '0:00';
   $('review').hidden = true; $('nudge').hidden = true;
   $('timeout').disabled = true;
@@ -246,6 +313,7 @@ function teardownMic() {
   $('rec').style.setProperty('--lvl', 0);
   $('rec').setAttribute('aria-pressed', 'false');
   $('rec').setAttribute('aria-label', 'Start recording');
+  $('tape').classList.remove('rolling');
   $('clock').hidden = true;
 }
 function finishRec() {
@@ -254,11 +322,11 @@ function finishRec() {
   teardownMic();
   rec = null;
   const blob = new Blob(chunks, { type: mime }); chunks = [];
-  if (!blob.size) { setStatus($('status'), 'Nothing recorded. Tap the mic and try again.', true); $('recLabel').textContent = 'Tap and talk'; return; }
+  if (!blob.size) { setStatus($('status'), 'Nothing recorded. Tap the button and try again.', true); $('recLabel').textContent = 'Tap and talk'; return; }
   take = { blob, mime, seconds, url: URL.createObjectURL(blob) };
   $('playback').src = take.url;
   $('review').hidden = false;
-  $('recLabel').textContent = `Got ${fmt(seconds)}. Tap to record over it`;
+  $('recLabel').textContent = `Got ${fmt(seconds)} on tape. Tap to record over it`;
   const q = byId(state.current);
   if (q?.nudge) { $('nudge').textContent = q.nudge; $('nudge').hidden = false; }
   $('timeout').disabled = !canTimeout();
@@ -345,18 +413,18 @@ async function lockIn() {
 function showCard() {
   const q = byId(state.current);
   if (!q) return;
+  const c = count();
   $('doneCard').hidden = true;
-  $('chamber').textContent = `Chamber ${count() + 1}: ${q.label}`;
-  $('setup').hidden = !q.setup; $('setup').textContent = q.setup || '';
+  $('chamber').textContent = c >= JACKPOT_AT ? `Overtime ${c - JACKPOT_AT + 1}` : `Round ${c + 1} of ${JACKPOT_AT}`;
+  $('tapeLabel').textContent = q.label;
   $('question').textContent = q.q;
   $('nudge').hidden = true;
   $('recLabel').textContent = 'Tap and talk';
-  $('rec').setAttribute('aria-label', 'Start recording');
   setStatus($('status'), '');
   $('timeout').textContent = state.timeouts > 0 ? `Call a timeout (${state.timeouts} left)` : 'No timeouts left';
   $('timeout').disabled = !canTimeout();
   $('card').hidden = false;
-  paintLock(); paintControls();
+  paintLock(); paintControls(); paintBoard();
   $('question').focus({ preventScroll: true });
   if (matchMedia('(max-width: 899px)').matches) $('card').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 }
@@ -364,14 +432,15 @@ function showCard() {
 function showDone(seconds) {
   const c = count();
   $('card').hidden = true;
-  $('doneTitle').textContent = c >= N ? 'Locked in. That’s all ten.' : `Locked in. ${c} down.`;
+  $('doneTitle').textContent = c >= N ? 'All ten. Buzzer.' : `Bucket. ${c} down.`;
   $('fact').textContent = seconds > 0 ? FACTS[(c - 1) % FACTS.length](seconds) : FACT_TYPED;
   $('again').textContent = remaining().length ? 'Spin again' : 'Flip to Side B';
   $('doneCard').hidden = false;
-  paintLamps(); paintPlatter(); paintControls(); paintTabs(); paintOutro();
-  playBells([880, 1108], 0.1);
+  paintBoard(); paintWheel(); paintControls(); paintTabs(); paintOutro();
+  playBells([880, 1108, 1318], 0.09);
+  party(c >= JACKPOT_AT ? 14 : 30);
   if (matchMedia('(max-width: 899px)').matches) $('doneCard').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
-  if (c >= JACKPOT_AT && !state.jackpotSeen) setTimeout(openJackpot, 1100);
+  if (c >= JACKPOT_AT && !state.jackpotSeen) setTimeout(openJackpot, 1300);
   else $('again').focus({ preventScroll: true });
 }
 
@@ -382,12 +451,12 @@ function paintControls() {
   $('spin').disabled = spinning;
   if (!left) {
     $('spin').hidden = true;
-    $('spinNote').textContent = state.gptSent ? 'The record’s clean. All ten answered.' : 'The record’s clean. Side B is next.';
+    $('spinNote').textContent = state.gptSent ? 'Wheel’s empty. All ten answered.' : 'Wheel’s empty. Side B is next.';
   } else if (!busy) {
     const c = count();
-    $('spinNote').textContent = c === 0 ? 'Ten questions on the record. Seven hits the jackpot.'
+    $('spinNote').textContent = c === 0 ? 'Ten questions on the wheel. Seven hits the jackpot.'
       : c < JACKPOT_AT ? `${JACKPOT_AT - c} more to the jackpot.`
-        : `Overtime. ${left} left on the record.`;
+        : `Overtime. ${left} left on the wheel.`;
   } else $('spinNote').textContent = '';
   $('controls').hidden = $('spin').hidden && !$('spinNote').textContent;
 }
@@ -396,12 +465,12 @@ function paintControls() {
 function openJackpot() {
   state.jackpotSeen = true; save();
   const j = $('jackpot');
-  const symbols = ['★', '♪', '◆', '★', '♪', '◆', '★', '7'];
+  const symbols = ['★', '●', '◆', '★', '●', '◆', '★', '7'];
   j.classList.remove('landed');
   const strips = j.querySelectorAll('.strip');
   strips.forEach((s) => {
     s.style.transition = 'none'; s.style.transform = 'translateY(0)';
-    s.innerHTML = symbols.map((x) => `<span class="${x === '7' ? 'seven' : ''}">${x}</span>`).join('');
+    s.innerHTML = symbols.map((x) => `<span class="${x === '7' ? 'seven' : x === '●' ? 'ball' : ''}">${x}</span>`).join('');
   });
   j.hidden = false;
   void j.getBoundingClientRect();
@@ -414,6 +483,7 @@ function openJackpot() {
   setTimeout(() => {
     j.classList.add('landed');
     playBells([784, 988, 1175, 1568, 1175, 1568], 0.11);
+    party(70); setTimeout(() => party(50), 900);
     $('overtime').hidden = !remaining().length;
     (remaining().length ? $('overtime') : $('toB')).focus();
   }, base + 3 * 400 + 250);
@@ -439,10 +509,10 @@ async function sendGpt() {
     await post({ kind: 'gpt', sid: state.sid }, text, 'text/plain; charset=utf-8');
     state.gptSent = true; save();
     localStorage.removeItem(`${KEY}.gpt`);
-    setStatus($('gptStatus'), count() >= JACKPOT_AT ? 'Sent to T. That’s Side B done.' : 'Sent to T. Side A still has questions waiting.');
+    setStatus($('gptStatus'), count() >= JACKPOT_AT ? 'Sent to T. Side B is done.' : 'Sent to T. Side A still has questions waiting.');
     $('sendGpt').textContent = 'Sent to T';
     paintTabs(); paintOutro(); paintControls();
-    playBells([880, 1108, 1318], 0.1);
+    playBells([880, 1108, 1318], 0.1); party(36);
   } catch {
     setStatus($('gptStatus'), 'That didn’t send. Your text is still in the box. Check your signal and try again.', true);
     $('sendGpt').disabled = false;
@@ -461,15 +531,15 @@ function paintTabs() {
   $('tabA').classList.toggle('done', count() >= JACKPOT_AT);
   $('tabB').classList.toggle('done', state.gptSent);
 }
-function wuName() {
-  let h = state.wu * 7919;
-  for (const ch of state.sid) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return `${WU_FIRST[h % WU_FIRST.length]} ${WU_LAST[(h >>> 8) % WU_LAST.length]}`;
-}
 function paintOutro() {
   const done = count() >= JACKPOT_AT && state.gptSent;
   $('outro').hidden = !done;
-  if (done) $('wuName').textContent = wuName();
+  if (!done) return;
+  const secs = Object.values(state.answered).reduce((a, x) => a + (x.seconds || 0), 0);
+  const cell = (v, cap) => `<div class="led-cell"><span class="led">${v}</span><span class="led-cap">${cap}</span></div>`;
+  $('boxScore').innerHTML = cell(pad2(count()), 'Answers')
+    + cell(fmt(secs), 'On the mic')
+    + cell(Math.round(secs * 18.5).toLocaleString('en-US'), 'Miles around the Sun');
 }
 function paintSound() {
   $('sound').textContent = state.sound ? 'Sound on' : 'Sound off';
@@ -477,13 +547,13 @@ function paintSound() {
 }
 
 /* ---------------- wiring ---------------- */
-buildPlatter();
-setRotation(state.rot % 360, true);
+buildWheel();
+setRotation(state.rot);
 $('prompt').textContent = GPT_PROMPT;
 $('gpt').value = localStorage.getItem(`${KEY}.gpt`) || '';
 $('sendGpt').disabled = !$('gpt').value.trim();
 if (state.gptSent) $('sendGpt').textContent = 'Send a new version to T';
-paintLamps(); paintPlatter(); paintTabs(); paintOutro(); paintSound();
+paintBoard(); paintWheel(); paintTabs(); paintOutro(); paintSound();
 
 if (state.started) {
   show(state.side === 'B' ? 'B' : 'A');
@@ -493,7 +563,7 @@ if (state.started) {
 
 $('start').addEventListener('click', () => {
   state.started = true; save();
-  audio();
+  audio(); playBells([523, 659, 784, 1046], 0.08); party(24);
   show('A'); paintControls();
   post({ kind: 'session', sid: state.sid }, JSON.stringify({ started: new Date().toISOString(), ua: navigator.userAgent }), 'application/json').catch(() => {});
 });
@@ -509,7 +579,7 @@ $('typed').addEventListener('input', paintLock);
 $('lock').addEventListener('click', lockIn);
 $('timeout').addEventListener('click', () => {
   if (!canTimeout()) return;
-  state.timeouts -= 1; save();
+  state.timeouts -= 1; save(); paintBoard();
   const skipped = state.current;
   clearTake(); $('typed').value = '';
   spin(skipped);
@@ -523,6 +593,5 @@ $('gpt').addEventListener('input', () => {
 $('sendGpt').addEventListener('click', sendGpt);
 $('overtime').addEventListener('click', () => { closeJackpot(); $('doneCard').hidden = true; spin(); });
 $('toB').addEventListener('click', () => { closeJackpot(); show('B'); });
-$('reroll').addEventListener('click', () => { state.wu += 1; save(); paintOutro(); });
 
 addEventListener('beforeunload', (e) => { if (take || (rec && rec.state === 'recording')) { e.preventDefault(); e.returnValue = ''; } });

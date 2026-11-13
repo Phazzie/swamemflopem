@@ -2,7 +2,7 @@
 
 A private one-person questionnaire for Sydney, for T's body-swap video.
 
-- `public/index.html`, `styles.css`, `app.js`: the page. Side A is a record she spins to get questions and answers by voice (or typing). Side B is a prompt she hands her ChatGPT.
+- `public/index.html`, `styles.css`, `app.js`: the page. Side A is a casino wheel she spins to get questions and answers by voice (or typing). Side B is a prompt she hands her ChatGPT.
 - `public/questions.js`: every word she reads. Change the questions here.
 - `public/results.html`: T's page for listening to and reading what came in. Needs the passcode.
 - `api/upload.js`: saves recordings (in slices), typed answers and the ChatGPT paste to a private Vercel Blob store.
