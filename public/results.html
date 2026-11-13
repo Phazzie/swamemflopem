@@ -57,6 +57,7 @@ async function open() {
   const sessions = {};
   for (const f of files) {
     const [, sid, a, b, c] = f.pathname.split('/');
+    if (sid.startsWith('testclaude')) continue; // upload checks, not Sydney
     const s = (sessions[sid] ||= { sid, takes: {}, gpt: [], first: f.uploadedAt });
     if (f.uploadedAt < s.first) s.first = f.uploadedAt;
     if (a === 'chatgpt') s.gpt.push(f);

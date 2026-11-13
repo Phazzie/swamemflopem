@@ -8,7 +8,7 @@ export const QUESTIONS = [
   {
     id: 'tuesday',
     label: 'Tuesday',
-    q: 'Walk me through a regular Tuesday, from when your eyes open to when you’re out for the night.',
+    q: 'Walk me through a regular Tuesday, from when your eyes open to when you fall asleep.',
     nudge: 'Which part of that day is yours and nobody else’s?',
   },
   {
@@ -33,7 +33,7 @@ export const QUESTIONS = [
     id: 'the-sub',
     label: 'The Sub',
     q: 'You get a week off from being you. Somebody you actually know has to cover the whole thing: your job, your people, your week. Who do you hand it to, and which day breaks them?',
-    nudge: 'What would they never see coming?',
+    nudge: 'What would hit them that they’d never see coming?',
   },
   {
     id: 'im-fine',
@@ -44,27 +44,26 @@ export const QUESTIONS = [
   {
     id: 'camera-roll',
     label: 'Camera Roll',
-    setup: 'Astronomers can’t visit a star. They read its light and work out what it’s made of.',
-    q: 'Same method. Before you open your camera roll, guess what your last ten photos are. Then open it and read me the real list.',
+    q: 'Before you open your camera roll, guess what your last ten photos are. Then open it and tell me what’s really there. Skip any you want.',
     nudge: 'What’s in there that you didn’t guess?',
   },
   {
-    id: 'the-tell',
-    label: 'The Tell',
-    q: 'What’s one small thing a person can do, at a drive-thru, in a group chat, at a four-way stop, that tells you everything you need to know about them?',
-    nudge: 'When did you last see somebody do it? What did you do?',
+    id: 'drive-thru',
+    label: 'Drive-Thru',
+    q: 'You’re running a drive-thru for one shift, and you get to make one new rule. What’s the rule, and who gets banned first?',
+    nudge: 'Who do you let slide even though they broke it?',
   },
   {
-    id: 'flowers',
-    label: 'Flowers',
-    q: 'What compliment do you get so often you’re tired of hearing it?',
-    nudge: 'What’s one nobody gives you that you’d actually keep?',
+    id: 'fridge-note',
+    label: 'Fridge Note',
+    q: 'Somebody’s staying at your place for a long weekend while you’re gone. Read me the note you leave on the fridge. The real one, not the polite one.',
+    nudge: 'Which line did you almost leave off?',
   },
   {
     id: 'ts-phone',
     label: 'T’s Phone',
     q: 'You wake up as T. His phone’s unlocked, his voice works, and you’ve got until noon before anybody catches on. You get three calls or texts. Who gets them, and what do you say?',
-    nudge: 'Which one should he have sent himself by now?',
+    nudge: 'Which one should T have sent already?',
   },
 ];
 
